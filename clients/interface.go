@@ -27,14 +27,16 @@ type ClientInterface interface {
 	SetStatistics(bool)                             // 设置是否开启数据统计
 	SetPacketHandle(PacketCallbackHandle)           // 配置报文回调
 	SetDisConnectCallback(DisConnectCallbackHandle) // 配置断开回调
-	DisConnect()                                    // 断开链接
+	DisConnect(isNoCb ...bool)                      // 断开链接
 	GetProtocol() enmu.ClientProtocol
 }
 
 type ClientManagerInterface interface {
-	Len() int                                                  // 返回客户端总数
-	List(start, end int) (int, clients_dto.ConnectionDatabase) // 返回客户端列表
+	Len() int                                                    // 返回客户端总数
+	List(start, end int) (int, []clients_dto.ConnectionDatabase) // 返回客户端列表
 	Start() error
-	Stop()
+	Stop() error
 	SetOptions(*ClientManagerOptions)
+	CloseOnce(id string) error
+	GetOnce(id string) (*clients_dto.ConnectionDatabase, error)
 }

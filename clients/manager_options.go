@@ -5,6 +5,7 @@ import (
 	"github.com/qdmc/mqtt_single_proxy/enmu"
 )
 
+// ClientManagerOptions   client管理器配置项
 type ClientManagerOptions struct {
 	TcpPort       uint16                   // tcp监听端口,默认:1883
 	IsWebsocket   bool                     // 是否开启websocket,默认:false
