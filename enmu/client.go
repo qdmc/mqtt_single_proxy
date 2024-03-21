@@ -1,5 +1,7 @@
 package enmu
 
+import "errors"
+
 // ClientProtocol  客户端协议
 type ClientProtocol string
 
@@ -20,3 +22,9 @@ const (
 	UserNameOrPasswordError HandshakeResult = 0x04 // 0x04连接已拒绝，无效的用户名或密码
 	uUnauthorizedError      HandshakeResult = 0x05 // 0x05连接已拒绝，未授权
 )
+
+var ClientDisconnectError = errors.New("client is disconnect")
+var ClientHeartTimeoutError = errors.New("client heartbeat is time out")
+var PacketEmptyError = errors.New("packet is empty")
+var ClientReadConnectionError = errors.New("client read connection error")
+var NotFoundClientError = errors.New("not found client")

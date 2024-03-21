@@ -19,8 +19,8 @@ type DisConnectCallbackHandle func(*clients_dto.ConnectionDatabase)
 // HandshakeHandle          握手校验Handle
 type HandshakeHandle func(clients_dto.ConnectionHandshakeDatabase) enmu.HandshakeResult
 
-// ClientInterface   客户端通用接口
-type ClientInterface interface {
+// clientInterface   客户端通用接口
+type clientInterface interface {
 	GetId() string                                  // 返回ClientId
 	GetDataBase() clients_dto.ConnectionDatabase    // 返回当前状态
 	AsyncDoConnection()                             // 异步处理Tcp长链接
@@ -29,6 +29,7 @@ type ClientInterface interface {
 	SetDisConnectCallback(DisConnectCallbackHandle) // 配置断开回调
 	DisConnect(isNoCb ...bool)                      // 断开链接
 	GetProtocol() enmu.ClientProtocol
+	WritePacketOnce(p mqtt_packet.ControlPacketInterface) (int64, error)
 }
 
 type ClientManagerInterface interface {
@@ -39,4 +40,5 @@ type ClientManagerInterface interface {
 	SetOptions(*ClientManagerOptions)
 	CloseOnce(id string) error
 	GetOnce(id string) (*clients_dto.ConnectionDatabase, error)
+	SendPacketOnce(id string, p mqtt_packet.ControlPacketInterface) (int64, error)
 }

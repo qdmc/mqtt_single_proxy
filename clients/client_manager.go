@@ -1,9 +1,9 @@
 package clients
 
 import (
-	"errors"
 	"github.com/qdmc/mqtt_packet"
 	"github.com/qdmc/mqtt_single_proxy/dto/clients_dto"
+	"github.com/qdmc/mqtt_single_proxy/enmu"
 	"net"
 	"sort"
 	"sync"
@@ -12,7 +12,7 @@ import (
 var manager *defaultClientManager
 var managerOnce sync.Once
 
-func New(opts ...*ClientManagerOptions) ClientManagerInterface {
+func NewClientManager(opts ...*ClientManagerOptions) ClientManagerInterface {
 	managerOnce.Do(func() {
 		opt := newOptions()
 		if opts != nil && len(opts) == 1 && opts[0] != nil {
@@ -20,7 +20,7 @@ func New(opts ...*ClientManagerOptions) ClientManagerInterface {
 		}
 		manager = &defaultClientManager{
 			mu:          sync.RWMutex{},
-			clientMap:   map[string]ClientInterface{},
+			clientMap:   map[string]clientInterface{},
 			tcpListener: nil,
 			udpListener: nil,
 			webListener: nil,
@@ -32,7 +32,7 @@ func New(opts ...*ClientManagerOptions) ClientManagerInterface {
 
 type defaultClientManager struct {
 	mu          sync.RWMutex
-	clientMap   map[string]ClientInterface
+	clientMap   map[string]clientInterface
 	tcpListener *net.TCPListener
 	udpListener net.Listener
 	webListener *net.TCPListener
@@ -70,7 +70,16 @@ func (m *defaultClientManager) List(start, end int) (int, []clients_dto.Connecti
 func (m *defaultClientManager) Start() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	panic("implement me")
+	var err error
+	defer func() {
+		if err != nil {
+			m.isStart = true
+		} else {
+
+		}
+	}()
+	// todo
+	return nil
 }
 
 func (m *defaultClientManager) Stop() error {
@@ -90,7 +99,7 @@ func (m *defaultClientManager) Stop() error {
 	for _, client := range m.clientMap {
 		go client.DisConnect(true)
 	}
-	m.clientMap = map[string]ClientInterface{}
+	m.clientMap = map[string]clientInterface{}
 	m.isStart = false
 	return err
 }
@@ -110,7 +119,7 @@ func (m *defaultClientManager) CloseOnce(id string) error {
 		client.DisConnect()
 		return nil
 	}
-	return errors.New("not found client")
+	return enmu.NotFoundClientError
 }
 func (m *defaultClientManager) GetOnce(id string) (*clients_dto.ConnectionDatabase, error) {
 	m.mu.Lock()
@@ -119,9 +128,16 @@ func (m *defaultClientManager) GetOnce(id string) (*clients_dto.ConnectionDataba
 		cb := client.GetDataBase()
 		return &cb, nil
 	}
-	return nil, errors.New("not found client")
+	return nil, enmu.NotFoundClientError
 }
-
+func (m *defaultClientManager) SendPacketOnce(id string, p mqtt_packet.ControlPacketInterface) (int64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if client, ok := m.clientMap[id]; ok {
+		return client.WritePacketOnce(p)
+	}
+	return 0, enmu.NotFoundClientError
+}
 func (m *defaultClientManager) doDisConnectCb(cd *clients_dto.ConnectionDatabase) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -146,7 +162,7 @@ func (m *defaultClientManager) doConnectedCb(id string) {
 	}
 }
 
-type clients []ClientInterface
+type clients []clientInterface
 
 func (cs clients) Len() int {
 	return len(cs)
