@@ -5,8 +5,10 @@ import (
 	"github.com/qdmc/mqtt_single_proxy/dto/clients_dto"
 	"github.com/qdmc/mqtt_single_proxy/enmu"
 	"net"
+	"net/http"
 	"sort"
 	"sync"
+	"time"
 )
 
 var manager *defaultClientManager
@@ -45,7 +47,60 @@ func (m *defaultClientManager) Len() int {
 	defer m.mu.RUnlock()
 	return len(m.clientMap)
 }
-
+func (m *defaultClientManager) doTcpConnection(conn net.Conn) {
+	client, err := handshakeTcp(conn, m.opt.Handshake, m.opt.MaxHandshakeTime)
+	if err != nil {
+		conn.Close()
+		return
+	}
+	go m.addClient(client)
+}
+func (m *defaultClientManager) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	var conn net.Conn
+	var err error
+	conn, err = websocketUpgradeHandler(req, w, m.opt.WebsocketHandle)
+	if err != nil {
+		httpResponseError(w, 404, err)
+		return
+	}
+	err = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err != nil {
+		return
+	}
+	_, err = conn.Write(makeServerHandshakeBytes(req))
+	if err != nil {
+		return
+	}
+	err = conn.SetWriteDeadline(time.Time{})
+	if err != nil {
+		return
+	}
+	err = conn.SetDeadline(time.Time{})
+	if err != nil {
+		return
+	}
+	client, err := handshakeWebsocket(conn, m.opt.Handshake, m.opt.MaxHandshakeTime)
+	if err != nil {
+		return
+	}
+	go m.addClient(client)
+}
+func (m *defaultClientManager) addClient(client clientInterface) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.isStart {
+		return
+	}
+	id := client.GetId()
+	if oldClient, ok := m.clientMap[id]; ok {
+		oldClient.DisConnect(true)
+		db := oldClient.GetDataBase()
+		m.doDisConnectCb(&db)
+		delete(m.clientMap, id)
+	}
+	m.clientMap[id] = client
+	go m.doConnectedCb(id)
+}
 func (m *defaultClientManager) List(start, end int) (int, []clients_dto.ConnectionDatabase) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

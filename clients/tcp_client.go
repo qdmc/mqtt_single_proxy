@@ -2,6 +2,7 @@ package clients
 
 import (
 	"github.com/qdmc/mqtt_packet"
+	"github.com/qdmc/mqtt_packet/packets"
 	"github.com/qdmc/mqtt_single_proxy/dto/clients_dto"
 	"github.com/qdmc/mqtt_single_proxy/enmu"
 	"net"
@@ -27,28 +28,6 @@ type tcpClient struct {
 	t             time.Duration
 }
 
-func newTcpClient(id string, conn net.Conn, statistics ...bool) *tcpClient {
-	isStatistics := false
-	if statistics != nil && len(statistics) == 1 && statistics[0] {
-		isStatistics = true
-	}
-	var rl, wl uint64
-	return &tcpClient{
-		id:            id,
-		status:        false,
-		disConnectCb:  nil,
-		packetCb:      nil,
-		connectedNano: time.Now().UnixNano(),
-		closeNano:     0,
-		writeLength:   &wl,
-		readLength:    &rl,
-		isStatistics:  isStatistics,
-		conn:          conn,
-		stopChan:      make(chan struct{}, 1),
-		t:             time.Duration(60) * time.Second,
-	}
-}
-
 func (c *tcpClient) GetId() string {
 	return c.id
 }
@@ -72,6 +51,7 @@ func (c *tcpClient) AsyncDoConnection() {
 	var err error
 	defer func() {
 		c.status = false
+		c.closeNano = time.Now().UnixNano()
 		c.doDisconnect(err)
 	}()
 	c.tr = time.NewTimer(c.t)
@@ -168,4 +148,61 @@ func (c *tcpClient) doDisconnect(err error) {
 		db := c.GetDataBase()
 		go c.disConnectCb(&db)
 	}
+}
+
+func newTcpClient(id string, conn net.Conn, statistics ...bool) *tcpClient {
+	isStatistics := false
+	if statistics != nil && len(statistics) == 1 && statistics[0] {
+		isStatistics = true
+	}
+	var rl, wl uint64
+	return &tcpClient{
+		id:            id,
+		status:        false,
+		disConnectCb:  nil,
+		packetCb:      nil,
+		connectedNano: time.Now().UnixNano(),
+		closeNano:     0,
+		writeLength:   &wl,
+		readLength:    &rl,
+		isStatistics:  isStatistics,
+		conn:          conn,
+		stopChan:      make(chan struct{}, 1),
+		t:             time.Duration(60) * time.Second,
+	}
+}
+func handshakeTcp(c net.Conn, handle HandshakeHandle, handshakeTime int64) (*tcpClient, error) {
+	var err error
+	if handshakeTime <= 0 {
+		handshakeTime = 10
+	}
+	err = c.SetDeadline(time.Now().Add(time.Duration(handshakeTime) * time.Second))
+	if err != nil {
+		return nil, err
+	}
+	_, p, err := mqtt_packet.ReadOnce(c)
+	if err != nil {
+		return nil, err
+	}
+	packet, ok := p.(*packets.ConnectPacket)
+	if !ok {
+		return nil, enmu.NotConnectPacketError
+	}
+	if handle != nil {
+		hd := clients_dto.ConnectionHandshakeDatabase{
+			ClientId: packet.ClientIdentifier,
+			UserName: packet.Username,
+			Password: string(packet.Password),
+			Addr:     c.RemoteAddr(),
+		}
+		res := handle(hd)
+		if res != enmu.Success {
+			return nil, enmu.ClienthHandshakeFaild
+		}
+	}
+	err = c.SetDeadline(time.Time{})
+	if err != nil {
+		return nil, err
+	}
+	return newTcpClient(packet.ClientIdentifier, c), nil
 }

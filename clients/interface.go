@@ -5,7 +5,11 @@ import (
 	"github.com/qdmc/mqtt_packet"
 	"github.com/qdmc/mqtt_single_proxy/dto/clients_dto"
 	"github.com/qdmc/mqtt_single_proxy/enmu"
+	"net/http"
 )
+
+// WebsocketHandshakeHandle websocket请求检验
+type WebsocketHandshakeHandle func(req *http.Request) error
 
 // ConnectedCallback      链接成功的回调
 type ConnectedCallback func(string)
@@ -24,6 +28,7 @@ type clientInterface interface {
 	GetId() string                                  // 返回ClientId
 	GetDataBase() clients_dto.ConnectionDatabase    // 返回当前状态
 	AsyncDoConnection()                             // 异步处理Tcp长链接
+	SetTimeOut(t int64)                             // 设置客户超时
 	SetStatistics(bool)                             // 设置是否开启数据统计
 	SetPacketHandle(PacketCallbackHandle)           // 配置报文回调
 	SetDisConnectCallback(DisConnectCallbackHandle) // 配置断开回调
@@ -41,4 +46,5 @@ type ClientManagerInterface interface {
 	CloseOnce(id string) error
 	GetOnce(id string) (*clients_dto.ConnectionDatabase, error)
 	SendPacketOnce(id string, p mqtt_packet.ControlPacketInterface) (int64, error)
+	ServeHTTP(w http.ResponseWriter, req *http.Request)
 }
